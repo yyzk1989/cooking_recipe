@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>레시피 관리</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <a href="index.html" class="site-title" style="color:#fff;">어머니의 레시피</a>
+    <a href="index.html" class="btn btn-outline">목록 보기</a>
+  </div>
+</header>
+
+<div class="admin-container">
+
+  <!-- 레시피 추가/수정 폼 -->
+  <div class="admin-section">
+    <div class="admin-section-title" id="formTitle">새 레시피 추가</div>
+
+    <input type="hidden" id="editId">
+
+    <div class="form-group">
+      <label class="form-label">요리 이름</label>
+      <input type="text" id="fTitle" class="form-input" placeholder="예) 김치찌개">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">카테고리</label>
+      <select id="fCategory" class="form-select"></select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">재료</label>
+      <textarea id="fIngredients" class="form-textarea"
+        placeholder="한 줄에 재료 하나씩 입력하세요.&#10;예)&#10;된장 2큰술&#10;두부 1/2모&#10;애호박 1/4개"></textarea>
+      <p class="form-hint">한 줄에 재료 하나씩 입력</p>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">만드는 법</label>
+      <textarea id="fSteps" class="form-textarea" style="min-height:160px"
+        placeholder="한 줄에 단계 하나씩 입력하세요.&#10;예)&#10;냄비에 물을 붓고 끓인다.&#10;된장을 풀어준다.&#10;두부를 넣는다."></textarea>
+      <p class="form-hint">한 줄에 조리 단계 하나씩 입력</p>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" id="saveBtn" onclick="saveRecipe()">저장</button>
+      <button class="btn btn-secondary" id="cancelBtn" onclick="cancelEdit()" style="display:none">취소</button>
+    </div>
+  </div>
+
+  <!-- 레시피 목록 -->
+  <div class="admin-section">
+    <div class="admin-section-title">레시피 목록 (<span id="recipeCount">0</span>개)</div>
+    <div id="recipeList">
+      <div style="text-align:center;padding:20px;color:#999;">불러오는 중...</div>
+    </div>
+  </div>
+
+  <!-- 카테고리 관리 -->
+  <div class="admin-section">
+    <div class="admin-section-title">카테고리 관리</div>
+    <div class="category-list" id="categoryList"></div>
+    <div class="category-add-row">
+      <input type="text" id="newCategoryInput" class="form-input" placeholder="새 카테고리 이름">
+      <button class="btn btn-secondary" onclick="addCategory()">추가</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="js/firebase-init.js"></script>
+<script src="js/app.js"></script>
+<script>
+  let categories = [];
+
+  async function init() {
+    categories = await getCategories();
+    renderCategorySelect();
+    renderCategoryList();
+    await renderRecipeList();
+
+    const editId = getUrlParam('edit');
+    if (editId) {
+      const recipe = await getRecipeById(editId);
+      if (recipe) loadEditForm(recipe);
+    }
+  }
+
+  function renderCategorySelect() {
+    const sel = document.getElementById('fCategory');
+    const current = sel.value;
+    sel.innerHTML = categories.map(c => `<option value="${c}">${c}</option>`).join('');
+    if (current && categories.includes(current)) sel.value = current;
+  }
+
+  function renderCategoryList() {
+    document.getElementById('categoryList').innerHTML = categories.map(cat => `
+      <span class="category-item">
+        ${cat}
+        <button onclick="deleteCategory('${cat}')" title="삭제">&times;</button>
+      </span>
+    `).join('');
+  }
+
+  async function renderRecipeList() {
+    const recipes = await getRecipes();
+    const list = document.getElementById('recipeList');
+    document.getElementById('recipeCount').textContent = recipes.length;
+
+    if (recipes.length === 0) {
+      list.innerHTML = '<p style="color:#999;font-size:0.9rem;padding:12px 0;">등록된 레시피가 없습니다.</p>';
+      return;
+    }
+
+    list.innerHTML = recipes.map(r => `
+      <div class="recipe-list-item">
+        <div class="recipe-list-info">
+          <div class="recipe-list-title">${r.title}</div>
+          <div class="recipe-list-cat">${r.category} · 재료 ${(r.ingredients||[]).length}가지</div>
+        </div>
+        <div class="recipe-list-actions">
+          <a href="recipe.html?id=${r.id}" class="btn btn-secondary btn-sm">보기</a>
+          <button class="btn btn-secondary btn-sm" onclick="editRecipe('${r.id}')">수정</button>
+          <button class="btn btn-danger btn-sm" onclick="confirmDelete('${r.id}', '${r.title.replace(/'/g,"\\'")}')">삭제</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function saveRecipe() {
+    const title = document.getElementById('fTitle').value.trim();
+    const category = document.getElementById('fCategory').value;
+    const ingredientsRaw = document.getElementById('fIngredients').value;
+    const stepsRaw = document.getElementById('fSteps').value;
+
+    if (!title) { alert('요리 이름을 입력해주세요.'); return; }
+    if (!ingredientsRaw.trim()) { alert('재료를 입력해주세요.'); return; }
+    if (!stepsRaw.trim()) { alert('만드는 법을 입력해주세요.'); return; }
+
+    const ingredients = ingredientsRaw.split('\n').map(s => s.trim()).filter(Boolean);
+    const steps = stepsRaw.split('\n').map(s => s.trim()).filter(Boolean);
+
+    const saveBtn = document.getElementById('saveBtn');
+    saveBtn.disabled = true;
+    saveBtn.textContent = '저장 중...';
+
+    try {
+      const editId = document.getElementById('editId').value;
+      if (editId) {
+        await updateRecipe(editId, { title, category, ingredients, steps });
+        alert('수정되었습니다.');
+      } else {
+        await addRecipe({ title, category, ingredients, steps });
+        alert('레시피가 추가되었습니다.');
+      }
+      resetForm();
+      await renderRecipeList();
+    } catch (e) {
+      alert('저장 중 오류가 발생했습니다.');
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = '저장';
+    }
+  }
+
+  async function editRecipe(id) {
+    const recipe = await getRecipeById(id);
+    if (recipe) {
+      loadEditForm(recipe);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  function loadEditForm(recipe) {
+    document.getElementById('formTitle').textContent = '레시피 수정';
+    document.getElementById('editId').value = recipe.id;
+    document.getElementById('fTitle').value = recipe.title;
+    renderCategorySelect();
+    document.getElementById('fCategory').value = recipe.category;
+    document.getElementById('fIngredients').value = (recipe.ingredients || []).join('\n');
+    document.getElementById('fSteps').value = (recipe.steps || []).join('\n');
+    document.getElementById('cancelBtn').style.display = 'inline-block';
+  }
+
+  function cancelEdit() {
+    resetForm();
+  }
+
+  function resetForm() {
+    document.getElementById('formTitle').textContent = '새 레시피 추가';
+    document.getElementById('editId').value = '';
+    document.getElementById('fTitle').value = '';
+    document.getElementById('fIngredients').value = '';
+    document.getElementById('fSteps').value = '';
+    document.getElementById('cancelBtn').style.display = 'none';
+  }
+
+  async function confirmDelete(id, title) {
+    if (!confirm(`"${title}"을(를) 삭제할까요?`)) return;
+    try {
+      await deleteRecipeById(id);
+      await renderRecipeList();
+    } catch (e) {
+      alert('삭제 중 오류가 발생했습니다.');
+    }
+  }
+
+  async function addCategory() {
+    const input = document.getElementById('newCategoryInput');
+    const name = input.value.trim();
+    if (!name) return;
+    if (categories.includes(name)) { alert('이미 있는 카테고리입니다.'); return; }
+    categories.push(name);
+    await saveCategories(categories);
+    input.value = '';
+    renderCategorySelect();
+    renderCategoryList();
+  }
+
+  async function deleteCategory(cat) {
+    const recipes = await getRecipes();
+    const inUse = recipes.some(r => r.category === cat);
+    if (inUse) { alert(`"${cat}" 카테고리를 사용 중인 레시피가 있어 삭제할 수 없습니다.`); return; }
+    if (!confirm(`"${cat}" 카테고리를 삭제할까요?`)) return;
+    categories = categories.filter(c => c !== cat);
+    await saveCategories(categories);
+    renderCategorySelect();
+    renderCategoryList();
+  }
+
+  document.getElementById('newCategoryInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addCategory();
+  });
+
+  init();
+</script>
+
+</body>
+</html>

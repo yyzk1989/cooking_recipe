@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>어머니의 레시피</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <span class="site-title">어머니의 레시피</span>
+    <a href="admin.html" class="btn btn-outline">관리</a>
+  </div>
+</header>
+
+<main class="main">
+  <div class="search-bar">
+    <input type="text" id="searchInput" placeholder="요리 이름 또는 재료로 검색..." class="search-input">
+  </div>
+  <div class="category-tabs" id="categoryTabs"></div>
+  <div class="recipe-grid" id="recipeGrid">
+    <div style="grid-column:1/-1;text-align:center;padding:40px;color:#999;">불러오는 중...</div>
+  </div>
+  <div class="empty-state" id="emptyState" style="display:none">
+    <p>해당하는 레시피가 없습니다.</p>
+    <a href="admin.html" class="btn btn-primary">레시피 추가하기</a>
+  </div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="js/firebase-init.js"></script>
+<script src="js/app.js"></script>
+<script>
+  let allRecipes = [];
+  let allCategories = [];
+  let currentCategory = '전체';
+  let searchQuery = '';
+
+  async function init() {
+    try {
+      [allRecipes, allCategories] = await Promise.all([getRecipes(), getCategories()]);
+      renderCategories();
+      renderRecipes();
+    } catch (e) {
+      document.getElementById('recipeGrid').innerHTML =
+        '<div style="grid-column:1/-1;text-align:center;padding:40px;color:#c00;">데이터를 불러오지 못했습니다.<br>인터넷 연결을 확인해주세요.</div>';
+    }
+  }
+
+  function renderCategories() {
+    const categories = ['전체', ...allCategories];
+    document.getElementById('categoryTabs').innerHTML = categories.map(cat => `
+      <button class="category-tab ${cat === currentCategory ? 'active' : ''}"
+              onclick="selectCategory('${cat}')">${cat}</button>
+    `).join('');
+  }
+
+  function selectCategory(cat) {
+    currentCategory = cat;
+    renderCategories();
+    renderRecipes();
+  }
+
+  function renderRecipes() {
+    let recipes = [...allRecipes];
+
+    if (currentCategory !== '전체') {
+      recipes = recipes.filter(r => r.category === currentCategory);
+    }
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      recipes = recipes.filter(r =>
+        r.title.toLowerCase().includes(q) ||
+        (r.ingredients || []).some(i => i.toLowerCase().includes(q))
+      );
+    }
+
+    const grid = document.getElementById('recipeGrid');
+    const empty = document.getElementById('emptyState');
+
+    if (recipes.length === 0) {
+      grid.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+
+    empty.style.display = 'none';
+    grid.innerHTML = recipes.map(r => `
+      <a href="recipe.html?id=${r.id}" class="recipe-card">
+        <div class="recipe-card-body">
+          <span class="category-badge">${r.category}</span>
+          <h2 class="recipe-title">${r.title}</h2>
+          <p class="recipe-meta">재료 ${(r.ingredients||[]).length}가지 · ${(r.steps||[]).length}단계</p>
+        </div>
+      </a>
+    `).join('');
+  }
+
+  document.getElementById('searchInput').addEventListener('input', e => {
+    searchQuery = e.target.value;
+    renderRecipes();
+  });
+
+  init();
+</script>
+
+</body>
+</html>
