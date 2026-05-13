@@ -56,9 +56,18 @@
   <!-- 레시피 목록 -->
   <div class="admin-section">
     <div class="admin-section-title">레시피 목록 (<span id="recipeCount">0</span>개)</div>
+
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <input type="text" id="adminSearch" class="form-input" placeholder="이름으로 검색..." style="flex:1;" oninput="onFilter()">
+    </div>
+
+    <div id="adminCategoryTabs" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;"></div>
+
     <div id="recipeList">
       <div style="text-align:center;padding:20px;color:#999;">불러오는 중...</div>
     </div>
+
+    <div id="pagination" style="display:flex;gap:6px;justify-content:center;margin-top:14px;flex-wrap:wrap;"></div>
   </div>
 
   <!-- 카테고리 관리 -->
@@ -79,18 +88,95 @@
 <script src="js/app.js"></script>
 <script>
   let categories = [];
+  let allRecipes = [];
+  let adminCategory = '전체';
+  let adminSearch = '';
+  let currentPage = 1;
+  const PAGE_SIZE = 10;
 
   async function init() {
     categories = await getCategories();
     renderCategorySelect();
     renderCategoryList();
-    await renderRecipeList();
+    allRecipes = await getRecipes();
+    renderAdminCategoryTabs();
+    renderFiltered();
 
     const editId = getUrlParam('edit');
     if (editId) {
       const recipe = await getRecipeById(editId);
       if (recipe) loadEditForm(recipe);
     }
+  }
+
+  function onFilter() {
+    adminSearch = document.getElementById('adminSearch').value;
+    currentPage = 1;
+    renderFiltered();
+  }
+
+  function selectAdminCategory(cat) {
+    adminCategory = cat;
+    currentPage = 1;
+    renderAdminCategoryTabs();
+    renderFiltered();
+  }
+
+  function renderAdminCategoryTabs() {
+    const tabs = ['전체', ...categories];
+    document.getElementById('adminCategoryTabs').innerHTML = tabs.map(cat => `
+      <button onclick="selectAdminCategory('${cat}')"
+        style="padding:5px 12px;border-radius:20px;border:1px solid #ddd;cursor:pointer;font-size:0.85rem;
+               background:${cat === adminCategory ? '#e67e22' : '#fff'};
+               color:${cat === adminCategory ? '#fff' : '#555'};">${cat}</button>
+    `).join('');
+  }
+
+  function renderFiltered() {
+    let recipes = [...allRecipes];
+    if (adminCategory !== '전체') recipes = recipes.filter(r => r.category === adminCategory);
+    if (adminSearch) {
+      const q = adminSearch.toLowerCase();
+      recipes = recipes.filter(r => r.title.toLowerCase().includes(q));
+    }
+    document.getElementById('recipeCount').textContent = recipes.length;
+
+    const total = Math.ceil(recipes.length / PAGE_SIZE);
+    const page = recipes.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+    const list = document.getElementById('recipeList');
+    if (recipes.length === 0) {
+      list.innerHTML = '<p style="color:#999;font-size:0.9rem;padding:12px 0;">해당하는 레시피가 없습니다.</p>';
+      document.getElementById('pagination').innerHTML = '';
+      return;
+    }
+
+    list.innerHTML = page.map(r => `
+      <div class="recipe-list-item">
+        <div class="recipe-list-info">
+          <div class="recipe-list-title">${r.title}</div>
+          <div class="recipe-list-cat">${r.category} · 재료 ${(r.ingredients||[]).length}가지</div>
+        </div>
+        <div class="recipe-list-actions">
+          <a href="recipe.html?id=${r.id}" class="btn btn-secondary btn-sm">보기</a>
+          <button class="btn btn-secondary btn-sm" onclick="editRecipe('${r.id}')">수정</button>
+          <button class="btn btn-danger btn-sm" onclick="confirmDelete('${r.id}', '${r.title.replace(/'/g,"\\'")}')">삭제</button>
+        </div>
+      </div>
+    `).join('');
+
+    document.getElementById('pagination').innerHTML = total <= 1 ? '' :
+      Array.from({length: total}, (_, i) => i + 1).map(p => `
+        <button onclick="goPage(${p})"
+          style="padding:5px 12px;border-radius:6px;border:1px solid #ddd;cursor:pointer;
+                 background:${p === currentPage ? '#e67e22' : '#fff'};
+                 color:${p === currentPage ? '#fff' : '#555'};">${p}</button>
+      `).join('');
+  }
+
+  function goPage(p) {
+    currentPage = p;
+    renderFiltered();
   }
 
   function renderCategorySelect() {
@@ -110,28 +196,8 @@
   }
 
   async function renderRecipeList() {
-    const recipes = await getRecipes();
-    const list = document.getElementById('recipeList');
-    document.getElementById('recipeCount').textContent = recipes.length;
-
-    if (recipes.length === 0) {
-      list.innerHTML = '<p style="color:#999;font-size:0.9rem;padding:12px 0;">등록된 레시피가 없습니다.</p>';
-      return;
-    }
-
-    list.innerHTML = recipes.map(r => `
-      <div class="recipe-list-item">
-        <div class="recipe-list-info">
-          <div class="recipe-list-title">${r.title}</div>
-          <div class="recipe-list-cat">${r.category} · 재료 ${(r.ingredients||[]).length}가지</div>
-        </div>
-        <div class="recipe-list-actions">
-          <a href="recipe.html?id=${r.id}" class="btn btn-secondary btn-sm">보기</a>
-          <button class="btn btn-secondary btn-sm" onclick="editRecipe('${r.id}')">수정</button>
-          <button class="btn btn-danger btn-sm" onclick="confirmDelete('${r.id}', '${r.title.replace(/'/g,"\\'")}')">삭제</button>
-        </div>
-      </div>
-    `).join('');
+    allRecipes = await getRecipes();
+    renderFiltered();
   }
 
   async function saveRecipe() {
