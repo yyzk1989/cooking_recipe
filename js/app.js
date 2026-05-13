@@ -3,13 +3,25 @@ function getUrlParam(name) {
 }
 
 async function getRecipes() {
-  const snapshot = await db.collection('recipes').orderBy('createdAt', 'desc').get();
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  try {
+    const snapshot = await db.collection('recipes').orderBy('createdAt', 'desc').get();
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (e) {
+    if (window.RECIPES_DATA) return window.RECIPES_DATA.recipes || [];
+    throw e;
+  }
 }
 
 async function getRecipeById(id) {
-  const snap = await db.collection('recipes').doc(id).get();
-  return snap.exists ? { id: snap.id, ...snap.data() } : null;
+  try {
+    const snap = await db.collection('recipes').doc(id).get();
+    return snap.exists ? { id: snap.id, ...snap.data() } : null;
+  } catch (e) {
+    if (window.RECIPES_DATA) {
+      return (window.RECIPES_DATA.recipes || []).find(r => r.id === id) || null;
+    }
+    throw e;
+  }
 }
 
 async function addRecipe(data) {
@@ -29,11 +41,16 @@ async function deleteRecipeById(id) {
 }
 
 async function getCategories() {
-  const snap = await db.collection('config').doc('categories').get();
-  if (snap.exists) return snap.data().list || [];
-  const defaults = ["국/찌개", "반찬", "밥/면", "간식/디저트"];
-  await saveCategories(defaults);
-  return defaults;
+  try {
+    const snap = await db.collection('config').doc('categories').get();
+    if (snap.exists) return snap.data().list || [];
+    const defaults = ["국/찌개", "반찬", "밥/면", "간식/디저트"];
+    await saveCategories(defaults);
+    return defaults;
+  } catch (e) {
+    if (window.RECIPES_DATA) return window.RECIPES_DATA.categories || [];
+    throw e;
+  }
 }
 
 async function saveCategories(list) {
