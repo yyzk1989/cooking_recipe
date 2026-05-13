@@ -10,7 +10,7 @@
 
 <header class="header no-print">
   <div class="header-inner">
-    <a href="index.html" class="site-title" style="color:#fff;">어머니의 레시피</a>
+    <a href="index.html" class="site-title" style="color:#fff;">요리 레시피</a>
   </div>
 </header>
 
@@ -37,7 +37,7 @@
       return;
     }
 
-    document.title = recipe.title + ' - 어머니의 레시피';
+    document.title = recipe.title + ' - 요리 레시피';
 
     const ingredientsHtml = (recipe.ingredients || []).map((ing, i) => `
       <li id="ing_${i}">
