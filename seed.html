@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>레시피 추가</title>
+  <style>
+    body { font-family: sans-serif; padding: 40px; max-width: 600px; margin: 0 auto; }
+    .status { margin: 10px 0; padding: 10px; border-radius: 6px; }
+    .ok { background: #d4edda; color: #155724; }
+    .err { background: #f8d7da; color: #721c24; }
+    .ing { background: #fff3cd; color: #856404; }
+    button { padding: 12px 24px; font-size: 16px; cursor: pointer; background: #e67e22; color: white; border: none; border-radius: 6px; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <h2>레시피 Firestore 추가</h2>
+  <button id="btn" onclick="run()">추가 시작</button>
+  <div id="log"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="js/firebase-init.js"></script>
+<script>
+const recipes = [
+  {
+    title: "고추기름",
+    category: "양념/소스",
+    ingredients: ["생강 1T", "마늘 1T", "기름 1C", "고춧가루 4T~5T"],
+    steps: [
+      "생강, 마늘, 기름을 넣고 끓인다.",
+      "커피필터에 고춧가루를 넣고 끓인 기름을 붓는다.",
+      "향신기름이 마지근할 때 기름 1C에 고춧가루 4T~5T를 넣고 2~3시간 후에 밭에 거른다."
+    ],
+    createdAt: "2026-05-13"
+  },
+  {
+    title: "겨자초장",
+    category: "양념/소스",
+    ingredients: ["겨자 1T", "설탕 2T", "식초 2T", "레몬즙 1T", "소금 1t"],
+    steps: ["재료를 모두 섞는다."],
+    createdAt: "2026-05-13"
+  },
+  {
+    title: "단초물 (야채 샐러드)",
+    category: "양념/소스",
+    ingredients: ["물 3C", "설탕 1T", "식초 1T", "쥬스 1T", "소금 1t"],
+    steps: ["재료를 모두 섞는다."],
+    createdAt: "2026-05-13"
+  }
+];
+
+function log(msg, type) {
+  const div = document.createElement('div');
+  div.className = 'status ' + type;
+  div.textContent = msg;
+  document.getElementById('log').appendChild(div);
+}
+
+async function run() {
+  const btn = document.getElementById('btn');
+  btn.disabled = true;
+
+  // 카테고리에 양념/소스 추가
+  try {
+    const snap = await db.collection('config').doc('categories').get();
+    let list = snap.exists ? (snap.data().list || []) : ["국/찌개", "반찬", "밥/면", "간식/디저트"];
+    if (!list.includes("양념/소스")) {
+      list.push("양념/소스");
+      await db.collection('config').doc('categories').set({ list });
+      log("카테고리 '양념/소스' 추가 완료", "ok");
+    } else {
+      log("카테고리 '양념/소스' 이미 존재", "ing");
+    }
+  } catch(e) {
+    log("카테고리 추가 실패: " + e.message, "err");
+  }
+
+  // 레시피 추가
+  for (const r of recipes) {
+    try {
+      log(r.title + " 추가 중...", "ing");
+      await db.collection('recipes').add(r);
+      log(r.title + " 추가 완료 ✓", "ok");
+    } catch(e) {
+      log(r.title + " 실패: " + e.message, "err");
+    }
+  }
+
+  log("모두 완료! 이 페이지는 닫으셔도 됩니다.", "ok");
+}
+</script>
+</body>
+</html>
