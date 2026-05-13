@@ -15,6 +15,7 @@
 </head>
 <body>
   <h2>레시피 Firestore 추가</h2>
+  <div id="preview" style="margin-bottom:20px;"></div>
   <button id="btn" onclick="run()">추가 시작</button>
   <div id="log"></div>
 
@@ -71,6 +72,21 @@ const recipes = [
     createdAt: "2026-05-13"
   }
 ];
+
+// 페이지 로드 시 추가될 레시피 목록 표시
+document.getElementById('preview').innerHTML = `
+  <div style="background:#f8f9fa;border-radius:8px;padding:16px;">
+    <div style="font-weight:bold;margin-bottom:10px;">추가될 레시피 (${recipes.length}개)</div>
+    ${recipes.map((r, i) => `
+      <div style="padding:6px 0;border-bottom:1px solid #eee;display:flex;gap:10px;align-items:center;">
+        <span style="color:#999;font-size:0.85rem;min-width:20px;">${i+1}.</span>
+        <span style="font-weight:500;">${r.title}</span>
+        <span style="color:#e67e22;font-size:0.8rem;">${r.category}</span>
+        <span style="color:#999;font-size:0.8rem;">재료 ${r.ingredients.length}가지</span>
+      </div>
+    `).join('')}
+  </div>
+`;
 
 function log(msg, type) {
   const div = document.createElement('div');
